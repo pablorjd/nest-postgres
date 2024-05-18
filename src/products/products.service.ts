@@ -6,6 +6,8 @@ import { Product } from './entities/product.entity';
 import { Repository } from 'typeorm';
 import { PaginationDto } from '../common/dto/pagination-product.dto';
 
+import { validate as isUUID } from "uuid";
+
 @Injectable()
 export class ProductsService {
 
@@ -21,10 +23,8 @@ export class ProductsService {
     } catch (error) {
       this.handleExeptions(error);
     }
-    return;
   }
 
-  // TODO: Implement pagination
   findAll(paginationDto:PaginationDto) {
     const { limit = 10, offset = 0, } = paginationDto
     return this.productoRepository.find({
@@ -33,16 +33,43 @@ export class ProductsService {
     });
   }
 
-  async findOne(id: string) {
-      const producto = await this.productoRepository.findOneBy({uuid:id});
-      if (!producto) {
-        throw new NotFoundException("Producto not found");
-      }
-      return producto;
+  async findOne(term: string) {
+    let product: Product;
+
+    if(isUUID(term)) {
+      product = await this.productoRepository.findOneBy({uuid: term});
+    }else{
+      product = await this.findByTitleOrSlug(product, term);
+    }
+    
+    if (!product) {
+      throw new NotFoundException("Producto not found");
+    }
+    return product;
   }
 
-  update(id: number, updateProductDto: UpdateProductDto) {
-    return `This action updates a #${id} product`;
+  private async findByTitleOrSlug(product: Product, term: string) {
+    const queryBuilder = this.productoRepository.createQueryBuilder();
+    product = await queryBuilder.where('UPPER(title) =:title or UPPER(slug) =:slug', {
+      title: term.toLocaleUpperCase(),
+      slug: term.toLocaleUpperCase()
+    }).getOne();
+    return product;
+  }
+
+  async update(id: string, updateProductDto: UpdateProductDto) {
+    const product = await this.productoRepository.preload({
+      uuid: id,
+      ...updateProductDto
+    });
+    if (!product) throw new BadRequestException('Product not found to update');
+    try {
+      await this.productoRepository.save(product);
+      return product;
+    } catch (error) {
+      this.handleExeptions(error);
+    }
+    
   }
 
   async remove(id: string) {
