@@ -1,7 +1,8 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { hostname } from 'os';
+import { ProductsModule } from './products/products.module';
+import { CommonModule } from './common/common.module';
 @Module({
   imports: [
     ConfigModule.forRoot(),
@@ -15,6 +16,8 @@ import { hostname } from 'os';
       autoLoadEntities: true,
       synchronize:true,
     }),
+    ProductsModule,
+    CommonModule,
   ],
   controllers: [],
   providers: [],
