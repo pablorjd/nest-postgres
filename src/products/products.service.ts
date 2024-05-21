@@ -3,7 +3,7 @@ import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Product } from './entities/product.entity';
-import { Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { PaginationDto } from '../common/dto/pagination-product.dto';
 
 import { validate as isUUID } from "uuid";
@@ -18,6 +18,8 @@ export class ProductsService {
   private readonly productoRepository: Repository<Product>,
     @InjectRepository(ProductImage)
     private readonly productoImageRepository: Repository<ProductImage>,
+
+    private readonly dataSource: DataSource
   ) { }
   
   async create(createProductDto: CreateProductDto) {
@@ -87,19 +89,35 @@ export class ProductsService {
   }
 
   async update(id: string, updateProductDto: UpdateProductDto) {
-    const product = await this.productoRepository.preload({
-      uuid: id,
-      ...updateProductDto,
-      images: []
-    });
+    const { images, ...restProduct } = updateProductDto
+    const product = await this.productoRepository.preload({ uuid: id, ...restProduct}); // solo la data de producto que vamos a actualizar
+ 
+    // create QUERY Runner
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
     if (!product) throw new BadRequestException('Product not found to update');
     try {
-      await this.productoRepository.save(product);
-      return product;
+
+      if (images) {
+        await queryRunner.manager.delete(ProductImage, { product: id}); // borramos las imagenes del producto actual si al actualizar se le pasan imagenes en el updateProductDto ** se borran las imagenes anteriores del producto **
+
+        product.images = images.map(image => this.productoImageRepository.create({ url: image })) // generamos la instancias de imagenes a partir de los datos de la imagen que se envia en el DTO y lo asignamos a la instancia de producto antes de guardarla
+      }
+
+      await queryRunner.manager.save(product); // guardamos el producto actual
+
+      await queryRunner.commitTransaction(); // commit transaction cuando todo esta OK
+      await queryRunner.release(); // liberamos el connection
+
+      // await this.productoRepository.save(product);
+      return this.findOnePlain(id);
     } catch (error) {
+      await queryRunner.rollbackTransaction(); // rollback transaction cuando algo salga mal
+      await queryRunner.release(); // liberamos el connection
       this.handleExeptions(error);
     }
-
   }
 
   async remove(id: string) {
