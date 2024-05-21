@@ -1,4 +1,5 @@
-import { BeforeInsert, BeforeUpdate, Column, Entity, PrimaryGeneratedColumn } from "typeorm";
+import { BeforeInsert, BeforeUpdate, Column, Entity, OneToMany, PrimaryGeneratedColumn } from "typeorm";
+import { ProductImage } from "./product_image.entity";
 
 @Entity()
 export class Product {
@@ -49,6 +50,13 @@ export class Product {
     })
     tags: string[];
 
+    @OneToMany(
+        () => ProductImage,
+        (productImage) => productImage.product,
+        {cascade:true, eager:true} // eager load all images for a product
+    )
+    images?:ProductImage[];
+
     @BeforeInsert()
     checkSlug(){
         if(!this.slug){
@@ -58,9 +66,9 @@ export class Product {
     }
     @BeforeUpdate()
     checkSlugUpdate(){
-        if(!this.slug){
-            this.slug = this.title;
-        }
-        this.slug = this.slug.toLowerCase().replaceAll(" ", "_").replaceAll("'", " ").replaceAll("/", "");
+        this.slug = this.slug.toLowerCase()
+                        .replaceAll(" ", "_")
+                        .replaceAll("'", " ")
+                        .replaceAll("/", "");
     }
 }
